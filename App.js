@@ -42,6 +42,7 @@ console.log("Cheeseburger1 "+bleManagerModule);
 const bleManagerEmitter = new NativeEventEmitter(bleManagerModule);
 const Stack = createStackNavigator();
 const deviceList = [];
+const discoveredUUIDs = [];
 var deviceData = [];
 const buttonList = [];
 console.log("Step 1");
@@ -88,14 +89,7 @@ const NewApp = () => {
   React.useEffect(()=>{
   
     BleManager.start();
-    //bleManagerEmitter.addListener('BleManagerDiscoverPeripheral',handleDiscoverDevice);
-    //bleManagerEmitter.addListener('BleManagerStopScan', handleStopScan);
-    
-
-    console.log("Pissy Person");
-
-    //bleManagerEmitter.addListener('BleManagerDidWrite', handleDidWrite );
-
+  
 
   });
 
@@ -112,18 +106,20 @@ const NewApp = () => {
 
 
 
-}
+} //End New App
 
 const handleDiscoverDevice = (peripheral) =>{
 
     
-  if(peripheral.name != null && peripheral.name.substring(0,4) == "Avid")
+  if(peripheral.name != null && peripheral.name.substring(0,4) == "Avid" && !discoveredUUIDs.includes(peripheral.id))
     {
       deviceList.push(peripheral);
+      discoveredUUIDs.push(peripheral.id);
       console.log("Device Found "+deviceList[0].id);
+      console.log("UUIS "+discoveredUUIDs);
     }
 
-}
+} // End Handle Discover Device
 
 
 
@@ -146,6 +142,8 @@ const NewHomeScreen = ({navigation}) =>{
   });
   
   const [buttons,setButtons] = React.useState([]);
+  const [show,setShow] = React.useState(false);
+ 
   const buttonsRef = React.useRef(buttons);
   
   
@@ -156,8 +154,10 @@ const NewHomeScreen = ({navigation}) =>{
 
     var currentVal = "";
     var currentSerialNum = "";
-    var currentHexIndex = 0;
+    
     var deviceCount = 0;
+    let serialNoMemoryAddress = ['00','55'].map(x=>{return parseInt(x,16);});
+    var currentValue = "";
   
     const getDeviceData = () =>
     {
@@ -166,101 +166,142 @@ const NewHomeScreen = ({navigation}) =>{
         console.log("Boobies "+deviceList[deviceCount].name);
         BleManager.retrieveServices(deviceList[deviceCount].id).then((deviceInfo)=>{
           console.log("Cheeseburger");
-          writeAndRead256Data(deviceList[deviceCount]).then((value)=>{
-            console.log("Chicken");
-            deviceCount += 1;
-            if(deviceCount < deviceList.length)
-            {
-              getDeviceData();
-            }
-            else
-            {
-              //return new Promise((resolve)=>{resolve(true);});
-              return;
-            }
-  
-  
-          });
-          //BleManager.disconnect(deviceList[deviceCount].id);
+
+
+            BleManager.write(deviceList[deviceCount].id,getServicesAndCharacteristics('30'),getServicesAndCharacteristics('31'),serialNoMemoryAddress).then(()=>{
+
+                setTimeout(()=>{
+
+                BleManager.read(deviceList[deviceCount].id,getServicesAndCharacteristics('30'),getServicesAndCharacteristics('32')).then((readData)=>{
+
+                  console.log("The Data Is "+readData);
+                  const buffer = Buffer.Buffer.from(readData);
+
+                  for(var i = 0;i<6;i++)
+                  {
+                      currentValue+= hex_to_ascii(buffer.readUInt8(i).toString(16));
+                  }
+                  console.log("The Serial No Is "+currentValue);
+                  buttonList.push(<Button title={currentValue.split("").reverse().join("")} ref={ref => this.button = ref} deviceUUID={deviceList[deviceCount].id} key={currentVal} nativeID={currentVal}  onPress={()=>{processButton(this.button.props.deviceUUID);}} />  );
+                  BleManager.disconnect(deviceList[deviceCount].id);
+                  console.log("Chicken");
+                  deviceCount += 1;
+                  console.log("Length Is "+deviceCount+" "+deviceList.length);
+                  if(deviceCount < deviceList.length)
+                  {
+                    console.log("Pot");  
+                    getDeviceData();
+                  }
+                  else
+                  {
+                    console.log("pie");
+                    setButtons(buttonList);
+                    setShow(false);
+                    return;
+                  }
+                })},200);
+ 
+             });//End of Write
+          });//End Retrieve Services
+        });//End connect
+
+      }//end get device data
+ 
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+          
+       
           
   
-        });
+   
   
-  
-      });
-  
-    }///
-  
-  
-    const writeAndRead256Data = (inputDevice) =>
+
+
+      const getSerialNumber = (inputDevice) =>
       {
-        
-        
-        
-        console.log("The Current Thing Is "+inputDevice.id);
-        let addressData = ['00',firstAddresses[currentHexIndex]].map(x=>{return parseInt(x,16);});
-        
+      let memoryAddress = ['00','55'].map(x=>{return parseInt(x,16);});
+      var currentValue = "";
+
+      BleManager.write(inputDevice.id,getServicesAndCharacteristics('30'),getServicesAndCharacteristics('31'),serialNoMemoryAddress).then(()=>{
+
         setTimeout(()=>{
-          console.log("Turkey");
-          BleManager.write(inputDevice.id,getServicesAndCharacteristics('30'),getServicesAndCharacteristics('31'), addressData).then(()=>{
-            console.log("Dressing");
-          setTimeout(()=>{
-    
-              BleManager.read(inputDevice.id,getServicesAndCharacteristics('30'),getServicesAndCharacteristics('32')).then((readData)=>{
-    
-                console.log("Data From Device 2aa "+readData);
-                const buffer = Buffer.Buffer.from(readData); //https://github.com/feross/buffer#convert-arraybuffer-to-buffer
-                //const sensorData = buffer.readUInt8(7, true);
-                for(var i = 0;i<20;i++)
-                {
-                  currentVal+=buffer.readUInt8(i).toString(16);
-                }
-                console.log("The String Is "+currentVal);
-                //console.log("Buffer Data 4 "+sensorData);
-                //currentVal += String(readData);
-                if(currentHexIndex < 12)
-                {
-                  currentHexIndex+=1;
-                  console.log("Phishing");
-                  
-                  writeAndRead256Data(inputDevice);
-                    
-                }
-                else
-                {
-                  deviceData.push(currentVal);
-                  console.log("Serial Num Is "+currentVal.substring(130,142));
-                  buttonList.push(<Button title={hex_to_ascii(currentVal.substring(130,142)).split("").reverse().join("")} ref={ref => this.button = ref} deviceUUID={inputDevice.id} key={currentVal} nativeID={currentVal}  onPress={()=>{bleManagerEmitter.removeAllListeners('BleManagerStopScan');bleManagerEmitter.removeAllListeners('BleManagerDiscoverPeripheral');navigation.navigate('DetailScreen',{serialNumber:this.button.props.title,InputUUID:this.button.props.deviceUUID,FirstBytes:this.button.props.nativeID})}} />  );
-                  console.log("How many buttons "+buttonList.length+buttonList[0].accessibilityLabel);
-                  currentVal = "";
-                  currentHexIndex = 0;
-                  setButtons(buttonList);
-                  BleManager.disconnect(inputDevice.id).then(()=>{
-                    return;
-  
-                  })
-                  
-                }
-    
-  
-      
-              });
-             
-            },100);
-    
+
+          BleManager.read(inputDevice.id,getServicesAndCharacteristics('30'),getServicesAndCharacteristics('32')).then((readData)=>{
+
+            console.log("The Data Is "+readData);
+            const buffer = Buffer.Buffer.from(readData);
+
+            for(var i = 0;i<6;i++)
+            {
+                currentValue+= hex_to_ascii(buffer.readUInt8(i).toString(16));
+            }
+            console.log("The Serial No Is "+currentValue);
+            buttonList.push(<Button title={currentValue.split("").reverse().join("")} ref={ref => this.button = ref} deviceUUID={inputDevice.id} key={currentVal} nativeID={currentVal}  onPress={()=>{processButton(this.button.props.deviceUUID);}} />  );
+            setButtons(buttonList);
+            setShow(false);
+            BleManager.disconnect(inputDevice.id);
+            return Promise.resolve(true);
+
+            
+
+
           });
-  
-        },500);
-  
-  
-       
-        
-        
-       
-      }///////
+
+
+        },200);
+
+
+      });
+
+    }
+
+
+
+    const processButton = (inputDeviceUUID) => {
+
+      console.log("Boopies");
+      bleManagerEmitter.removeAllListeners('BleManagerStopScan');
+      bleManagerEmitter.removeAllListeners('BleManagerDiscoverPeripheral');
+
+
+      //get256Data(inputDeviceUUID);
+
+
+
+
+
+
+
+
+      navigation.navigate('DetailScreen',{serialNumber:this.button.props.title,InputUUID:this.button.props.deviceUUID});
+
+
+    }
+
+
+    
     
   
       getDeviceData();
+      
   
   }
   
@@ -273,9 +314,10 @@ const NewHomeScreen = ({navigation}) =>{
 
   return(
     <View>
-      <Pressable style={{marginTop:'10%'}}  title="Start Scan" onPress={()=>{BleManager.scan([],5,false).then(()=>{console.log("Scan Started");});}}>
+      <Pressable style={{marginTop:'10%'}}  title="Start Scan" onPress={()=>{setShow(!show);BleManager.scan([],5,false).then(()=>{console.log("Scan Started");});}}>
         <Text style={{textAlign:'center',fontSize:30}}>Start Scan</Text>
       </Pressable>
+      {show && <Text style={{textAlign:'center',fontSize:25}}>Scanning...</Text>}
       <ScrollView>
         {buttons}
         
@@ -288,9 +330,114 @@ const NewHomeScreen = ({navigation}) =>{
 
 const NewDetailScreen = ({route,navigation}) => {
 
-  const {serialNumber,InputUUID,FirstBytes} = route.params;
+  const {serialNumber,InputUUID} = route.params;
 
+  var currentVal = "";
+  var currentHexIndex = 0;
+  const [loadingDetail,setLoadingDetail] = React.useState(false);
+  const [showLoadingLabel,setShowLoadingLabel] = React.useState(true);
+  const [First256Bytes,setFirst256] = React.useState("");
   
+    const get256Data = (inputDeviceID) =>
+      {
+        
+        
+        
+        console.log("The Current Thing Is "+inputDeviceID);
+        let addressData = ['00',firstAddresses[currentHexIndex]].map(x=>{return parseInt(x,16);});
+        
+        
+        BleManager.connect(inputDeviceID).then((device)=>{
+
+          BleManager.retrieveServices(inputDeviceID,[getServicesAndCharacteristics('30')]).then((info)=>{
+
+
+
+            setTimeout(()=>{
+              console.log("Turkey");
+              BleManager.write(inputDeviceID,getServicesAndCharacteristics('30'),getServicesAndCharacteristics('31'), addressData).then(()=>{
+                console.log("Dressing");
+              setTimeout(()=>{
+        
+                  BleManager.read(inputDeviceID,getServicesAndCharacteristics('30'),getServicesAndCharacteristics('32')).then((readData)=>{
+        
+                    console.log("Data From Device 2aa "+readData);
+                    const buffer = Buffer.Buffer.from(readData); //https://github.com/feross/buffer#convert-arraybuffer-to-buffer
+                    //const sensorData = buffer.readUInt8(7, true);
+                    for(var i = 0;i<20;i++)
+                    {
+                      currentVal+=buffer.readUInt8(i).toString(16);
+                    }
+                    console.log("The String Is "+currentVal);
+                    
+    
+    
+                   
+                    if(currentHexIndex < 12)
+                    {
+                      currentHexIndex+=1;
+                      console.log("Phishing "+currentHexIndex);
+                      //return Promise.reject();
+                      get256Data(inputDeviceID);
+                      //return Promise.reject();
+                        
+                    }
+                    else
+                    {
+                      
+                      console.log("Piping "+currentVal);
+                      setFirst256(currentVal);
+                      setLoadingDetail(true);
+                      setShowLoadingLabel(false);
+                      return;
+                      /*deviceData.push(currentVal);
+                      console.log("Serial Num Is "+currentVal.substring(130,142));
+                      buttonList.push(<Button title={hex_to_ascii(currentVal.substring(130,142)).split("").reverse().join("")} ref={ref => this.button = ref} deviceUUID={inputDevice.id} key={currentVal} nativeID={currentVal}  onPress={()=>{bleManagerEmitter.removeAllListeners('BleManagerStopScan');bleManagerEmitter.removeAllListeners('BleManagerDiscoverPeripheral');navigation.navigate('DetailScreen',{serialNumber:this.button.props.title,InputUUID:this.button.props.deviceUUID,FirstBytes:this.button.props.nativeID})}} />  );
+                      console.log("How many buttons "+buttonList.length+buttonList[0].accessibilityLabel);
+                      currentVal = "";
+                      currentHexIndex = 0;
+                      setButtons(buttonList);
+                      setShow(false);
+                      BleManager.disconnect(inputDevice.id).then(()=>{
+                        return Promise.resolve(true);
+      
+                      })*/
+                      
+                    }
+        
+      
+          
+                  }).catch((error)=>{console.log("RRRREDDD error "+error);});
+                 
+                },100);
+        
+              }).catch((error)=>{console.log("Writeee Error "+error);});
+      
+            },100);
+
+
+
+
+
+          });
+
+
+        });
+        
+        
+        
+        
+        
+       
+  
+  
+       
+        
+        
+       
+      }///////
+
+  get256Data(InputUUID);
 
   const assignSerialNumber = (serialNumber,deviceUUID) =>
   {
@@ -322,12 +469,18 @@ const NewDetailScreen = ({route,navigation}) => {
 // console.log("0xF1" + data.charCodeAt(0).toString(16));
 
   return(
+    
+    
     <View>
-      <Text>Serial Number:{serialNumber}</Text>
-      <Pressable onPress={()=>{assignSerialNumber("AABBCC",InputUUID)}}>
+      {showLoadingLabel && <Text>Loading</Text>}
+      {loadingDetail &&  <Text>Serial Number:{serialNumber}</Text>}
+      {loadingDetail && <Text>First 256 Bytes: {First256Bytes}</Text>}
+      {loadingDetail && <Pressable onPress={()=>{assignSerialNumber("AABBCC",InputUUID)}}>
         <Text style={{fontSize:30}}>Press Here to assign serial number 'AABBCC'</Text>
-      </Pressable>
+      </Pressable>}
+    
     </View>
+      
 
 
   );
